@@ -252,7 +252,17 @@ final class TokenStore: ObservableObject {
 
 enum DefaultTokens {
     static let tokens: [TokenConfig] = [
-        // TODO: Replace with real mints for SOL, JUP, MET, BONK, PAYAI, RADR.
+        TokenConfig(mint: "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh", symbol: "3NZ9", pinned: false),
+        TokenConfig(mint: "A4Yevf3KZvCNmst2vTPczCk8UEjqqYp7EPnvxv8EEB8a", symbol: "A4YE", pinned: false),
+        TokenConfig(mint: "CMkj12qHC9RjAUs1MED38Bt7gfyP3TbEpa1mcBno3RUY", symbol: "CMKJ", pinned: false),
+        TokenConfig(mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", symbol: "DEZX", pinned: false),
+        TokenConfig(mint: "ehipS3kn9GUSnEMgtB9RxCNBVfH5gTNRVxNtqFTBAGS", symbol: "EHIP", pinned: false),
+        TokenConfig(mint: "FAFxVxnkzZHMCodkWyoccgUNgVScqMw2mhhQBYDFjFAF", symbol: "FAFX", pinned: false),
+        TokenConfig(mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", symbol: "JUPY", pinned: false),
+        TokenConfig(mint: "PAYmo6moDF3Ro3X6bU2jwe2UdBnBhv8YjLgL1j4DxGu", symbol: "PAYM", pinned: false),
+        TokenConfig(mint: "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", symbol: "SKRB", pinned: false),
+        TokenConfig(mint: "So11111111111111111111111111111111111111112", symbol: "SO11", pinned: false),
+        TokenConfig(mint: "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL", symbol: "METV", pinned: false)
     ]
 }
 

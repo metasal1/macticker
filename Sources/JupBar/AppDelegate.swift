@@ -24,11 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupMenuBar() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let item = NSStatusBar.system.statusItem(withLength: 24)
         if let button = item.button {
             button.image = AppIcon.makeMenuBarIcon()
             button.imagePosition = .imageOnly
             button.imageScaling = .scaleProportionallyDown
+            button.image?.size = NSSize(width: 18, height: 18)
             button.toolTip = "Jup Bar"
         }
         let menu = NSMenu()
