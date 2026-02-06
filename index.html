@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>jup.bar — JupBar for Jupiter Cats</title>
+    <meta
+      name="description"
+      content="JupBar is a floating macOS ticker bar built for Jupiter Cats. Just Uptodate Pricing for Jupiter Mobile and Jupiter Exchange."
+    />
+    <link rel="canonical" href="https://jup.bar" />
+    <meta name="theme-color" content="#0b0f12" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <meta property="og:title" content="jup.bar — JupBar for Jupiter Cats" />
+    <meta
+      property="og:description"
+      content="JupBar is a floating macOS ticker bar for Jupiter Cats. Just Uptodate Pricing for Jupiter Mobile and Jupiter Exchange."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://jup.bar" />
+    <meta property="og:image" content="https://jup.bar/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="jup.bar — JupBar for Jupiter Cats" />
+    <meta
+      name="twitter:description"
+      content="JupBar is a floating macOS ticker bar for Jupiter Cats. Just Uptodate Pricing for Jupiter Mobile and Jupiter Exchange."
+    />
+    <meta name="twitter:image" content="https://jup.bar/og.png" />
+    <!-- Umami Analytics -->
+    <script
+      defer
+      src="https://stats.sal.fun/script.js"
+      data-website-id="56372374-e075-490e-a908-1984d4095255"
+    ></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@400;600;700&display=swap");
+
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f12;
+        --bg2: #0f151b;
+        --card: #121b22;
+        --text: #e7eef6;
+        --muted: #92a1b2;
+        --accent: #f7b04f;
+        --accent2: #f97262;
+        --border: #1f2a33;
+        --glow: rgba(247, 176, 79, 0.25);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Sora", "SF Pro Display", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(1200px 500px at 20% -20%, #2a1d0c 0%, transparent 60%),
+          radial-gradient(900px 400px at 110% 0%, #1d0f0a 0%, transparent 55%),
+          linear-gradient(180deg, var(--bg), var(--bg2));
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        font-size: 20px;
+        letter-spacing: 0.2px;
+      }
+
+      .dot {
+        width: 14px;
+        height: 14px;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        border-radius: 999px;
+        box-shadow: 0 0 24px rgba(249, 114, 98, 0.4);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        background: #131b22;
+        border-radius: 999px;
+        border: 1px solid #1f2a33;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .hero {
+        margin-top: 64px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 32px;
+        align-items: center;
+      }
+
+      h1 {
+        font-size: clamp(32px, 6vw, 54px);
+        line-height: 1.05;
+        margin: 0 0 16px 0;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.5;
+        margin: 0 0 28px;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 12px 18px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .btn.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        color: #0b0f12;
+        border: none;
+      }
+
+      .preview {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .preview::after {
+        content: "";
+        position: absolute;
+        inset: -120px;
+        background: radial-gradient(circle, var(--glow) 0%, transparent 65%);
+        opacity: 0.8;
+      }
+
+      .preview-inner {
+        position: relative;
+        z-index: 1;
+      }
+
+      .ticker {
+        display: flex;
+        gap: 16px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #0f141a;
+        border: 1px solid #1a242e;
+        font-size: 12px;
+        letter-spacing: 0.2px;
+        flex-wrap: wrap;
+      }
+
+      .mini {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: #131b22;
+        border-radius: 999px;
+        border: 1px solid #1f2a33;
+      }
+
+      .green {
+        color: #6de36b;
+      }
+
+      .red {
+        color: #ff7f7f;
+      }
+
+      .section {
+        margin-top: 96px;
+      }
+
+      .section h2 {
+        font-size: 28px;
+        margin: 0 0 8px 0;
+      }
+
+      .section p.section-subtitle {
+        color: var(--muted);
+        margin: 0 0 24px 0;
+      }
+
+      .grid {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .shots {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
+      }
+
+      .shot {
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: #0e141b;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 240px;
+      }
+
+      .shot img {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid #1f2a33;
+        display: block;
+      }
+
+      .shot-media {
+        border-radius: 14px;
+        border: 1px solid #1b2630;
+        background:
+          linear-gradient(140deg, rgba(30, 46, 58, 0.9), rgba(14, 20, 27, 0.8)),
+          repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.04) 0,
+            rgba(255, 255, 255, 0.04) 12px,
+            rgba(255, 255, 255, 0) 12px,
+            rgba(255, 255, 255, 0) 24px
+          );
+        height: 160px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+      }
+
+      .shot img {
+        width: 100%;
+        height: 160px;
+        object-fit: cover;
+        border-radius: 14px;
+        border: 1px solid #1b2630;
+      }
+
+      .shot h4 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .shot p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .features-grid {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+
+      footer {
+        margin-top: 96px;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media (max-width: 720px) {
+        .hero {
+          margin-top: 40px;
+        }
+
+        header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="logo">
+          <span class="dot"></span>
+          jup.bar
+        </div>
+        <div class="pill">Just Uptodate Pricing</div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <h1>JupBar for Jupiter Cats.</h1>
+          <p class="subtitle">
+            Just Uptodate Pricing. JupBar keeps your favorite tokens visible while you move between Jupiter Mobile and
+            Jupiter Exchange.
+          </p>
+          <div class="cta-row">
+            <a class="btn primary" href="/jupbar-latest.dmg" target="_blank" rel="noopener noreferrer">Download Latest Build</a>
+            <a class="btn" href="https://jup.ag/?refId=yfgv2ibxy07v" target="_blank" rel="noopener noreferrer">Trade on Jupiter Cats</a>
+          </div>
+        </div>
+        <div class="preview">
+          <div class="preview-inner">
+            <div class="ticker">
+              <span class="mini">SOL $77.6 <span class="red">-14.8%</span></span>
+              <span class="mini">JUP $0.156 <span class="red">-16.4%</span></span>
+              <span class="mini">TRACKER $0.045 <span class="green">+12.2%</span></span>
+              <span class="mini">SKR $0.0225 <span class="green">+27.6%</span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="screenshots">
+        <h2>Screenshots</h2>
+        <p class="section-subtitle">Dark mode views from the live app.</p>
+        <div class="shots">
+          <div class="shot">
+            <img src="/landing-screens/jupbar-floating.png" alt="jup.bar floating ticker bar" />
+            <h4>Floating ticker bar</h4>
+            <p>Always-on-top pricing with hover-to-pause and instant Jupiter Exchange links.</p>
+          </div>
+          <div class="shot">
+            <img src="/landing-screens/jupbar-manage.png" alt="jup.bar manage tickers window" />
+            <h4>Token manager</h4>
+            <p>Add mints, import CSVs, pin tokens, and control alerts in one place.</p>
+          </div>
+          <div class="shot">
+            <img src="/landing-screens/jupbar-both.png" alt="jup.bar floating bar with manager" />
+            <h4>Bar + manager</h4>
+            <p>Keep the bar visible while managing your list.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <h2>Why JupBar</h2>
+        <p class="section-subtitle">Built for Cats who live in the Jupiter Ecosystem.</p>
+        <div class="features-grid">
+          <div class="card">
+            <h3>Instant flow</h3>
+            <p>Hover to pause. Click a ticker to open Jupiter Exchange with the token preselected.</p>
+          </div>
+          <div class="card">
+            <h3>Fast + native</h3>
+            <p>Always-on-top, ultra-lightweight, and tuned for macOS performance.</p>
+          </div>
+          <div class="card">
+            <h3>Own your list</h3>
+            <p>Add by mint, import/export CSV, and bring your own RPC.</p>
+          </div>
+          <div class="card">
+            <h3>Clean setup</h3>
+            <p>Paste multiple mints, reorder, and pin the ones you care about most.</p>
+          </div>
+          <div class="card">
+            <h3>Alerts & deltas</h3>
+            <p>Configurable change thresholds so you only get the moves that matter.</p>
+          </div>
+          <div class="card">
+            <h3>Designed for traders</h3>
+            <p>Minimal chrome, readable tokens, and the ability to pause or pin.</p>
+          </div>
+          <div class="card">
+            <h3>Multiple watchlists</h3>
+            <p>Coming soon for Cats who track different strategies.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div>
+          Metasal —
+          <a href="https://metasal.xyz/?ref=jupbarapp" target="_blank" rel="noopener noreferrer">metasal.xyz</a>
+        </div>
+        <div>jup.bar • JupBar for Jupiter Cats</div>
+      </footer>
+    </div>
+  </body>
+</html>
