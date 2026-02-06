@@ -50,10 +50,15 @@
         --accent2: #f97262;
         --border: #1f2a33;
         --glow: rgba(247, 176, 79, 0.25);
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
       }
 
       * {
         box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
       }
 
       body {
@@ -64,16 +69,45 @@
           radial-gradient(1200px 500px at 20% -20%, #2a1d0c 0%, transparent 60%),
           radial-gradient(900px 400px at 110% 0%, #1d0f0a 0%, transparent 55%),
           linear-gradient(180deg, var(--bg), var(--bg2));
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background:
+          radial-gradient(600px 280px at 80% 10%, rgba(247, 176, 79, 0.12), transparent 60%),
+          radial-gradient(520px 240px at 10% 20%, rgba(249, 114, 98, 0.12), transparent 60%);
+        pointer-events: none;
+        z-index: -2;
+      }
+
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+        background-size: 40px 40px;
+        opacity: 0.2;
+        pointer-events: none;
+        z-index: -3;
       }
 
       a {
         color: inherit;
       }
 
+      a:hover {
+        color: var(--text);
+      }
+
       .wrap {
         max-width: 1120px;
         margin: 0 auto;
-        padding: 48px 24px 96px;
+        padding: 56px 24px 120px;
       }
 
       header {
@@ -104,8 +138,8 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 4px 12px;
-        background: #131b22;
+        padding: 6px 14px;
+        background: linear-gradient(135deg, rgba(247, 176, 79, 0.12), rgba(249, 114, 98, 0.12));
         border-radius: 999px;
         border: 1px solid #1f2a33;
         font-size: 12px;
@@ -121,16 +155,36 @@
       }
 
       h1 {
-        font-size: clamp(32px, 6vw, 54px);
+        font-size: clamp(36px, 6.5vw, 62px);
         line-height: 1.05;
         margin: 0 0 16px 0;
       }
 
       .subtitle {
         color: var(--muted);
-        font-size: 18px;
+        font-size: 19px;
         line-height: 1.5;
         margin: 0 0 28px;
+        max-width: 560px;
+      }
+
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid #1f2a33;
+        background: rgba(12, 18, 23, 0.6);
+        font-size: 12px;
+        color: var(--muted);
       }
 
       .cta-row {
@@ -147,12 +201,38 @@
         color: var(--text);
         text-decoration: none;
         font-weight: 600;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
       }
 
       .btn.primary {
         background: linear-gradient(135deg, var(--accent), var(--accent2));
         color: #0b0f12;
         border: none;
+        box-shadow: 0 14px 40px rgba(249, 114, 98, 0.28);
+        padding: 14px 22px;
+        font-size: 15px;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        border-color: rgba(247, 176, 79, 0.6);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
+      }
+
+      .hero-card {
+        display: grid;
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .hero-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
       }
 
       .preview {
@@ -160,7 +240,7 @@
         border: 1px solid var(--border);
         border-radius: 20px;
         padding: 20px;
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+        box-shadow: var(--shadow);
         position: relative;
         overflow: hidden;
       }
@@ -213,7 +293,7 @@
       }
 
       .section h2 {
-        font-size: 28px;
+        font-size: 30px;
         margin: 0 0 8px 0;
       }
 
@@ -237,6 +317,13 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(247, 176, 79, 0.5);
+        box-shadow: var(--shadow);
       }
 
       .card h3 {
@@ -246,8 +333,12 @@
 
       .shots {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 20px;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        grid-template-areas:
+          "manage floating"
+          "manage combo";
+        gap: 22px;
+        align-items: start;
       }
 
       .shot {
@@ -258,7 +349,25 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
-        min-height: 240px;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .shot:hover {
+        transform: translateY(-4px);
+        border-color: rgba(247, 176, 79, 0.5);
+        box-shadow: var(--shadow);
+      }
+
+      .shot.manage {
+        grid-area: manage;
+      }
+
+      .shot.floating {
+        grid-area: floating;
+      }
+
+      .shot.combo {
+        grid-area: combo;
       }
 
       .shot img {
@@ -280,21 +389,16 @@
             rgba(255, 255, 255, 0) 12px,
             rgba(255, 255, 255, 0) 24px
           );
-        height: 160px;
+        width: 100%;
         display: grid;
         place-items: center;
-        color: var(--muted);
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
+        overflow: hidden;
       }
 
-      .shot img {
+      .shot-media img {
         width: 100%;
-        height: 160px;
-        object-fit: cover;
-        border-radius: 14px;
-        border: 1px solid #1b2630;
+        height: 100%;
+        object-fit: contain;
       }
 
       .shot h4 {
@@ -315,6 +419,27 @@
         gap: 16px;
       }
 
+      .download-section {
+        margin-top: 96px;
+        padding: 28px;
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        background: linear-gradient(140deg, rgba(18, 27, 34, 0.9), rgba(10, 16, 21, 0.9));
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 16px;
+      }
+
+      .download-section h3 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .download-meta {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
       footer {
         margin-top: 96px;
         display: flex;
@@ -323,6 +448,28 @@
         gap: 12px;
         color: var(--muted);
         font-size: 12px;
+      }
+
+      footer a {
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      footer a:hover {
+        color: var(--accent);
+      }
+
+      @media (max-width: 920px) {
+        .shots {
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          grid-template-areas: unset;
+        }
+
+        .shot.manage,
+        .shot.floating,
+        .shot.combo {
+          grid-area: unset;
+        }
       }
 
       @media (max-width: 720px) {
@@ -349,14 +496,23 @@
 
       <section class="hero">
         <div>
-          <h1>JupBar for Jupiter Cats.</h1>
+          <div class="badge-row">
+            <span class="badge">JupBar macOS</span>
+            <span class="badge">Jup Bar</span>
+            <span class="badge">Jupiter Mobile</span>
+            <span class="badge">Jupiter Exchange</span>
+          </div>
+          <h1>Just Uptodate Pricing for Jupiter Cats.</h1>
           <p class="subtitle">
-            Just Uptodate Pricing. JupBar keeps your favorite tokens visible while you move between Jupiter Mobile and
-            Jupiter Exchange.
+            JupBar keeps your favorite tokens visible across Jup Bar, Jupiter Mobile, and Jupiter Exchange. Fast, minimal,
+            and always ready for a swap.
           </p>
           <div class="cta-row">
             <a class="btn primary" href="/jupbar-latest.dmg" target="_blank" rel="noopener noreferrer">Download Latest Build</a>
-            <a class="btn" href="https://jup.ag/?refId=yfgv2ibxy07v" target="_blank" rel="noopener noreferrer">Trade on Jupiter Cats</a>
+            <a class="btn" href="https://jup.ag/?refId=yfgv2ibxy07v" target="_blank" rel="noopener noreferrer">Open Jupiter Cats</a>
+          </div>
+          <div class="hero-card">
+            <p>Instant menu bar access • Hover to pause • Click to open Jupiter Exchange</p>
           </div>
         </div>
         <div class="preview">
@@ -373,20 +529,26 @@
 
       <section class="section" id="screenshots">
         <h2>Screenshots</h2>
-        <p class="section-subtitle">Dark mode views from the live app.</p>
+        <p class="section-subtitle">Dark mode views from the live app, sized to the real ratios.</p>
         <div class="shots">
-          <div class="shot">
-            <img src="/landing-screens/jupbar-floating.png" alt="jup.bar floating ticker bar" />
-            <h4>Floating ticker bar</h4>
-            <p>Always-on-top pricing with hover-to-pause and instant Jupiter Exchange links.</p>
-          </div>
-          <div class="shot">
-            <img src="/landing-screens/jupbar-manage.png" alt="jup.bar manage tickers window" />
+          <div class="shot manage">
+            <div class="shot-media" style="aspect-ratio: 617 / 806">
+              <img src="/landing-screens/jupbar-manage.png" alt="JupBar manage tickers window" />
+            </div>
             <h4>Token manager</h4>
             <p>Add mints, import CSVs, pin tokens, and control alerts in one place.</p>
           </div>
-          <div class="shot">
-            <img src="/landing-screens/jupbar-both.png" alt="jup.bar floating bar with manager" />
+          <div class="shot floating">
+            <div class="shot-media" style="aspect-ratio: 587 / 53">
+              <img src="/landing-screens/jupbar-floating.png" alt="JupBar floating ticker bar" />
+            </div>
+            <h4>Floating ticker bar</h4>
+            <p>Always-on-top pricing with hover-to-pause and instant Jupiter Exchange links.</p>
+          </div>
+          <div class="shot combo">
+            <div class="shot-media" style="aspect-ratio: 310 / 226">
+              <img src="/landing-screens/jupbar-both.png" alt="JupBar floating bar with manager" />
+            </div>
             <h4>Bar + manager</h4>
             <p>Keep the bar visible while managing your list.</p>
           </div>
@@ -422,10 +584,24 @@
             <p>Minimal chrome, readable tokens, and the ability to pause or pin.</p>
           </div>
           <div class="card">
+            <h3>Jup Bar ready</h3>
+            <p>Keep the bar on top while you explore markets and routes.</p>
+          </div>
+          <div class="card">
             <h3>Multiple watchlists</h3>
             <p>Coming soon for Cats who track different strategies.</p>
           </div>
         </div>
+      </section>
+
+      <section class="download-section">
+        <h3>Download JupBar</h3>
+        <p class="section-subtitle">Built for Cats who want pricing on top of everything.</p>
+        <div class="cta-row">
+          <a class="btn primary" href="/jupbar-latest.dmg" target="_blank" rel="noopener noreferrer">Download Latest Build</a>
+          <a class="btn" href="https://jup.ag/?refId=yfgv2ibxy07v" target="_blank" rel="noopener noreferrer">Open Jupiter Cats</a>
+        </div>
+        <div class="download-meta">macOS DMG • Updates as we ship new builds</div>
       </section>
 
       <footer>
