@@ -1,1 +1,103 @@
+name: Build macOS DMG
 
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.0.0)'
+        required: false
+        default: 'dev'
+
+jobs:
+  build:
+    runs-on: macos-14
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build Release
+        run: swift build -c release
+
+      - name: Create App Bundle
+        run: |
+          APP_NAME="JupBar"
+          APP_DIR="$APP_NAME.app"
+          VERSION="${{ github.event.inputs.version || github.ref_name || 'dev' }}"
+          
+          mkdir -p "$APP_DIR/Contents/MacOS"
+          mkdir -p "$APP_DIR/Contents/Resources"
+          
+          cp .build/release/JupBar "$APP_DIR/Contents/MacOS/"
+          cp assets/JupBar.icns "$APP_DIR/Contents/Resources/"
+          
+          cat > "$APP_DIR/Contents/Info.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>JupBar</string>
+              <key>CFBundleDisplayName</key>
+              <string>JupBar</string>
+              <key>CFBundleIdentifier</key>
+              <string>xyz.metasal.jupbar</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundleExecutable</key>
+              <string>JupBar</string>
+              <key>CFBundleIconFile</key>
+              <string>JupBar</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>13.0</string>
+              <key>LSUIElement</key>
+              <true/>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name || 'dev' }}"
+          DMG_NAME="JupBar-${VERSION}.dmg"
+          
+          mkdir -p dmg-contents
+          cp -R JupBar.app dmg-contents/
+          ln -s /Applications dmg-contents/Applications
+          
+          hdiutil create -volname "JupBar" \
+            -srcfolder dmg-contents \
+            -ov -format UDZO \
+            "$DMG_NAME"
+          
+          cp "$DMG_NAME" "jupbar-latest.dmg"
+
+      - name: Upload DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JupBar-DMG
+          path: "*.dmg"
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            JupBar-*.dmg
+            jupbar-latest.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
