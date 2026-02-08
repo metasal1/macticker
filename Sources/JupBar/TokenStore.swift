@@ -6,31 +6,57 @@ import AppKit
 final class TokenStore: ObservableObject {
     @Published var configs: [TokenConfig] = []
     @Published private(set) var quotes: [TokenQuote] = []
-    @Published private(set) var rpcURL: String
     @Published private(set) var scrollSpeed: Double
     @Published private(set) var alertThresholdPercent: Double
+    @Published private(set) var jupApiKey: String
+    @Published private(set) var jupBaseURL: String
 
     private let defaultsKey = "jupbar.tokens"
-    private let rpcKey = "jupbar.rpcURL"
     private let speedKey = "jupbar.scrollSpeed"
     private let alertKey = "jupbar.alertThresholdPercent"
+    private let jupKey = "jupbar.jupApiKey"
+    private let jupBaseKey = "jupbar.jupBaseURL"
     private var timer: Timer?
-    private var api: HeliusAPI
+    private var jupPrice: JupPriceClient
+    private var jupTokens: JupTokenClient
+    private var tokenMetaCache: [String: JupTokenMeta] = [:]
     private var priceHistory: [String: [PricePoint]] = [:]
     private var lastAlertedAt: [String: Date] = [:]
     private let alertCooldown: TimeInterval = 600
 
     init() {
-        let savedRPC = UserDefaults.standard.string(forKey: rpcKey)
-        let defaultRPC = "https://viviyan-bkj12u-fast-mainnet.helius-rpc.com"
-        let resolvedRPC = savedRPC?.isEmpty == false ? savedRPC! : defaultRPC
         let savedSpeed = UserDefaults.standard.double(forKey: speedKey)
         self.scrollSpeed = savedSpeed > 0 ? savedSpeed : 40
         let savedAlert = UserDefaults.standard.double(forKey: alertKey)
         self.alertThresholdPercent = savedAlert > 0 ? savedAlert : 5
-        self.rpcURL = resolvedRPC
-        self.api = HeliusAPI(rpcURL: resolvedRPC)
+        let savedJup = UserDefaults.standard.string(forKey: jupKey)
+        let resolvedJup = savedJup?.isEmpty == false ? savedJup! : "3309da44-211b-4acb-9d31-c36fb54d9459"
+        let savedBase = UserDefaults.standard.string(forKey: jupBaseKey)
+        let resolvedBase = Self.sanitizeBaseURL(savedBase) ?? "https://rpc.jup.bar"
+        self.jupApiKey = resolvedJup
+        self.jupBaseURL = resolvedBase
+        self.jupPrice = JupPriceClient(apiKey: resolvedJup, baseURL: resolvedBase)
+        self.jupTokens = JupTokenClient(apiKey: resolvedJup, baseURL: resolvedBase)
         load()
+    }
+
+    func updateJupApiKey(_ key: String) {
+        let clean = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        jupApiKey = clean
+        UserDefaults.standard.set(clean, forKey: jupKey)
+        jupPrice = JupPriceClient(apiKey: clean, baseURL: jupBaseURL)
+        jupTokens = JupTokenClient(apiKey: clean, baseURL: jupBaseURL)
+        Task { await refresh() }
+    }
+
+    func updateJupBaseURL(_ value: String) {
+        guard let clean = Self.sanitizeBaseURL(value) else { return }
+        jupBaseURL = clean
+        UserDefaults.standard.set(clean, forKey: jupBaseKey)
+        jupPrice = JupPriceClient(apiKey: jupApiKey, baseURL: clean)
+        jupTokens = JupTokenClient(apiKey: jupApiKey, baseURL: clean)
+        Task { await refresh() }
     }
 
     func startPolling() {
@@ -52,6 +78,7 @@ final class TokenStore: ObservableObject {
         guard !configs.contains(where: { $0.mint == clean }) else { return }
         let config = TokenConfig(mint: clean, symbol: shortSymbol(for: clean), pinned: false)
         configs.append(config)
+        normalizePinnedOrder()
         persist()
         Task { await refresh() }
     }
@@ -65,6 +92,7 @@ final class TokenStore: ObservableObject {
         guard !unique.isEmpty else { return }
         let newConfigs = unique.map { TokenConfig(mint: $0, symbol: shortSymbol(for: $0), pinned: false) }
         configs.append(contentsOf: newConfigs)
+        normalizePinnedOrder()
         persist()
         Task { await refresh() }
     }
@@ -72,12 +100,14 @@ final class TokenStore: ObservableObject {
     func removeMint(_ mint: String) {
         let clean = mint.trimmingCharacters(in: .whitespacesAndNewlines)
         configs.removeAll { $0.mint == clean }
+        normalizePinnedOrder()
         persist()
         Task { await refresh() }
     }
 
     func moveConfigs(from offsets: IndexSet, to destination: Int) {
         configs.move(fromOffsets: offsets, toOffset: destination)
+        normalizePinnedOrder()
         persist()
     }
 
@@ -88,22 +118,15 @@ final class TokenStore: ObservableObject {
             }
             return lhs.symbol.lowercased() < rhs.symbol.lowercased()
         }
+        normalizePinnedOrder()
         persist()
     }
 
     func togglePinned(for mint: String) {
         guard let index = configs.firstIndex(where: { $0.mint == mint }) else { return }
         configs[index].pinned.toggle()
+        normalizePinnedOrder()
         persist()
-    }
-
-    func updateRPCURL(_ url: String) {
-        let clean = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        rpcURL = clean
-        UserDefaults.standard.set(clean, forKey: rpcKey)
-        api = HeliusAPI(rpcURL: clean)
-        Task { await refresh() }
     }
 
     func updateScrollSpeed(_ speed: Double) {
@@ -162,31 +185,38 @@ final class TokenStore: ObservableObject {
             return
         }
         let mints = configs.map { $0.mint }
-        let data = await api.fetchQuotes(mints: mints)
+        let jupPrices = await jupPrice.fetchPrices(mints: mints)
+        let missingMeta = mints.filter { tokenMetaCache[$0] == nil }
+        if !missingMeta.isEmpty {
+            let meta = await jupTokens.fetchTokens(mints: missingMeta)
+            for (mint, token) in meta {
+                tokenMetaCache[mint] = token
+            }
+        }
         let now = Date()
         let merged = configs.map { config -> TokenQuote in
-            if var quote = data[config.mint] {
-                let change1h = updateHistory(mint: config.mint, price: quote.price, now: now)
+            let meta = tokenMetaCache[config.mint]
+            if let price = jupPrices[config.mint] {
+                let change1h = updateHistory(mint: config.mint, price: price, now: now)
                 maybePlayAlert(mint: config.mint, change1h: change1h, now: now)
-                quote = TokenQuote(
-                    mint: quote.mint,
-                    symbol: quote.symbol,
-                    name: quote.name,
-                    price: quote.price,
+                return TokenQuote(
+                    mint: config.mint,
+                    symbol: meta?.symbol ?? config.symbol,
+                    name: meta?.name,
+                    price: price,
                     change1h: change1h,
                     volume1h: nil,
-                    iconURL: quote.iconURL
+                    iconURL: meta?.iconURL
                 )
-                return quote
             }
             return TokenQuote(
                 mint: config.mint,
-                symbol: config.symbol,
-                name: nil,
+                symbol: meta?.symbol ?? config.symbol,
+                name: meta?.name,
                 price: nil,
                 change1h: nil,
                 volume1h: nil,
-                iconURL: nil
+                iconURL: meta?.iconURL
             )
         }
         quotes = merged
@@ -213,6 +243,12 @@ final class TokenStore: ObservableObject {
         UserDefaults.standard.set(data, forKey: defaultsKey)
     }
 
+    private func normalizePinnedOrder() {
+        let pinned = configs.filter { $0.pinned }
+        let unpinned = configs.filter { !$0.pinned }
+        configs = pinned + unpinned
+    }
+
     private func shortSymbol(for mint: String) -> String {
         let prefix = mint.prefix(4)
         return String(prefix).uppercased()
@@ -223,6 +259,13 @@ final class TokenStore: ObservableObject {
         guard trimmed.count >= 32 && trimmed.count <= 44 else { return false }
         let allowed = CharacterSet(charactersIn: "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
         return trimmed.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    private static func sanitizeBaseURL(_ value: String?) -> String? {
+        guard var raw = value?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        while raw.hasSuffix("/") { raw.removeLast() }
+        guard raw.hasPrefix("http") else { return nil }
+        return raw
     }
 
     private func updateHistory(mint: String, price: Double?, now: Date) -> Double? {

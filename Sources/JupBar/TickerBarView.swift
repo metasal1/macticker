@@ -33,7 +33,7 @@ struct TickerBarView: View {
                     if !pinnedQuotes.isEmpty {
                         HStack(spacing: 12) {
                             ForEach(pinnedQuotes, id: \.mint) { quote in
-                                TickerItemView(quote: quote)
+                                TickerItemView(quote: quote, isPinned: true)
                             }
                         }
                         .fixedSize(horizontal: true, vertical: false)
@@ -43,7 +43,7 @@ struct TickerBarView: View {
                             ForEach(tokenStore.quotes.filter { quote in
                                 !pinned.contains(where: { $0.mint == quote.mint })
                             }, id: \.mint) { quote in
-                                TickerItemView(quote: quote)
+                                TickerItemView(quote: quote, isPinned: false)
                             }
                         }
                         .fixedSize(horizontal: true, vertical: false)
@@ -100,6 +100,7 @@ private func openJupBar() {
 
 struct TickerItemView: View {
     let quote: TokenQuote
+    let isPinned: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -130,6 +131,12 @@ struct TickerItemView: View {
                 .lineLimit(1)
             // Volume removed until reliable data source is wired.
         }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isPinned ? Color.white.opacity(0.12) : Color.clear)
+        )
         .frame(maxHeight: .infinity, alignment: .center)
         .contentShape(Rectangle())
         .onTapGesture {
@@ -146,7 +153,19 @@ struct TickerItemView: View {
 
     private func priceString(_ value: Double?) -> String {
         guard let value else { return "--" }
-        return String(format: "$%.6f", value)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencySymbol = "$"
+        formatter.usesGroupingSeparator = true
+        if value >= 1 {
+            formatter.maximumFractionDigits = 2
+        } else if value >= 0.1 {
+            formatter.maximumFractionDigits = 6
+        } else {
+            formatter.maximumFractionDigits = 9
+        }
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "$%.9f", value)
     }
 
     private func changeValueString(_ value: Double?) -> String {

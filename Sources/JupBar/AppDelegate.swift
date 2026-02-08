@@ -10,7 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tokenStore = TokenStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = AppIcon.makeIcon()
         setupMenuBar()
         tickerWindowController = TickerBarWindowController(tokenStore: tokenStore)
@@ -24,48 +24,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupMenuBar() {
-        let item = NSStatusBar.system.statusItem(withLength: 24)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
-            button.image = AppIcon.makeMenuBarIcon()
+            let icon = AppIcon.loadMenuBarIcon() ?? AppIcon.makeMenuBarIcon()
+            icon.size = NSSize(width: 18, height: 18)
+            icon.isTemplate = false
+            button.image = icon
             button.imagePosition = .imageOnly
-            button.imageScaling = .scaleProportionallyDown
-            button.image?.size = NSSize(width: 18, height: 18)
+            button.imageScaling = .scaleProportionallyUpOrDown
+            button.title = ""
             button.toolTip = "Jup Bar"
         }
-        let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Manage Tickers…", action: #selector(showManage), keyEquivalent: "m"))
-        menu.addItem(NSMenuItem(title: "Toggle Full Width", action: #selector(toggleFullWidth), keyEquivalent: "f"))
-        let toggleItem = NSMenuItem(title: "Hide Bar", action: #selector(toggleBar), keyEquivalent: "h")
-        menu.addItem(toggleItem)
-        toggleBarItem = toggleItem
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "About Jup Bar", action: #selector(showAbout), keyEquivalent: ""))
-        menu.addItem(NSMenuItem.separator())
-        let attribution = NSMenuItem(title: "Metasal — metasal.xyz", action: nil, keyEquivalent: "")
-        attribution.isEnabled = false
-        menu.addItem(attribution)
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+        let menu = makeContextMenu(includeAbout: true)
+        toggleBarItem = menu.items.first { $0.action == #selector(toggleBar) }
         item.menu = menu
         statusItem = item
+        statusItem?.isVisible = true
     }
 
-    @objc private func showManage() {
+    @objc func showManage() {
         manageWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    @objc private func toggleFullWidth() {
+    @objc func toggleFullWidth() {
         tickerWindowController?.toggleFullWidthFromMenu()
     }
 
-    @objc private func toggleBar() {
+    @objc func toggleBar() {
         guard let controller = tickerWindowController else { return }
         let isVisible = controller.toggleVisibility()
         toggleBarItem?.title = isVisible ? "Hide Bar" : "Show Bar"
     }
 
-    @objc private func showAbout() {
+    @objc func showAbout() {
         NSApp.activate(ignoringOtherApps: true)
         let info = VersionInfo.current
         let credits = AboutCredits.make()
@@ -78,8 +70,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
     }
 
-    @objc private func quitApp() {
+    @objc func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    func makeContextMenu(includeAbout: Bool = false) -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Manage Tickers…", action: #selector(showManage), keyEquivalent: "m"))
+        menu.addItem(NSMenuItem(title: "Toggle Full Width", action: #selector(toggleFullWidth), keyEquivalent: "f"))
+        menu.addItem(NSMenuItem(title: "Hide Bar", action: #selector(toggleBar), keyEquivalent: "h"))
+        if includeAbout {
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(NSMenuItem(title: "About Jup Bar", action: #selector(showAbout), keyEquivalent: ""))
+            menu.addItem(NSMenuItem.separator())
+            let attribution = NSMenuItem(title: "Metasal — metasal.xyz", action: nil, keyEquivalent: "")
+            attribution.isEnabled = false
+            menu.addItem(attribution)
+        }
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
+        menu.items.forEach { $0.target = self }
+        return menu
     }
 }
 
@@ -117,6 +128,16 @@ private enum AppIcon {
         image.unlockFocus()
         image.isTemplate = false
         return image
+    }
+
+    static func loadMenuBarIcon() -> NSImage? {
+        if let image = NSImage(named: "JupBar") {
+            return image
+        }
+        if let url = Bundle.main.url(forResource: "JupBar", withExtension: "icns") {
+            return NSImage(contentsOf: url)
+        }
+        return nil
     }
 }
 

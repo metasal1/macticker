@@ -7,9 +7,10 @@ struct ManageTickersView: View {
 
     @State private var newMint: String = ""
     @State private var selectedMint: String?
-    @State private var rpcURL: String = ""
     @State private var speedValue: Double = 40
     @State private var alertThreshold: Double = 5
+    @State private var jupApiKey: String = ""
+    @State private var jupBaseURL: String = ""
 
     var body: some View {
         ScrollView {
@@ -48,8 +49,8 @@ struct ManageTickersView: View {
                         Button(action: {
                             tokenStore.togglePinned(for: config.mint)
                         }) {
-                            Image(systemName: config.pinned ? "pin.fill" : "pin")
-                                .foregroundStyle(config.pinned ? .primary : .secondary)
+                            Image(systemName: config.pinned ? "star.fill" : "star")
+                                .foregroundStyle(config.pinned ? .yellow : .secondary)
                         }
                         .buttonStyle(.plain)
                         if let url = quote?.iconURL {
@@ -81,6 +82,8 @@ struct ManageTickersView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .padding(.vertical, 4)
+                        .listRowBackground(config.pinned ? Color.white.opacity(0.06) : Color.clear)
                         .tag(config.mint)
                     }
                     .onMove { indices, newOffset in
@@ -157,15 +160,30 @@ struct ManageTickersView: View {
 
                 Divider()
 
-                Text("RPC")
-                    .font(.system(size: 14, weight: .semibold))
-                HStack {
-                    TextField("Helius RPC URL", text: $rpcURL)
-                        .textFieldStyle(.roundedBorder)
+            Text("Jupiter API Key")
+                .font(.system(size: 14, weight: .semibold))
+            HStack {
+                TextField("Jup API key", text: $jupApiKey)
+                    .textFieldStyle(.roundedBorder)
+                Button("Save") {
+                    let key = jupApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !key.isEmpty else { return }
+                    tokenStore.updateJupApiKey(key)
                 }
-                Text("Default: https://viviyan-bkj12u-fast-mainnet.helius-rpc.com")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+            }
+
+            Text("Jupiter RPC / Base URL")
+                .font(.system(size: 14, weight: .semibold))
+            HStack {
+                TextField("https://rpc.jup.bar", text: $jupBaseURL)
+                    .textFieldStyle(.roundedBorder)
+                Button("Save") {
+                    let value = jupBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !value.isEmpty else { return }
+                    tokenStore.updateJupBaseURL(value)
+                }
+            }
+
 
                 Divider()
 
@@ -175,10 +193,6 @@ struct ManageTickersView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                 Button("Save") {
-                    let url = rpcURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !url.isEmpty {
-                        tokenStore.updateRPCURL(url)
-                    }
                     tokenStore.updateScrollSpeed(speedValue)
                     tokenStore.updateAlertThreshold(alertThreshold)
                     onClose()
@@ -191,9 +205,10 @@ struct ManageTickersView: View {
             .padding(16)
         }
         .onAppear {
-            rpcURL = tokenStore.rpcURL
             speedValue = tokenStore.scrollSpeed
             alertThreshold = tokenStore.alertThresholdPercent
+            jupApiKey = tokenStore.jupApiKey
+            jupBaseURL = tokenStore.jupBaseURL
         }
         .preferredColorScheme(.dark)
     }

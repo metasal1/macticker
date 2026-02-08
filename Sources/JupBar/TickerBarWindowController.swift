@@ -39,7 +39,14 @@ final class TickerBarWindowController: NSWindowController {
         let contentView = TickerBarView(tokenStore: tokenStore, onToggleFullWidth: { [weak self] in
             self?.toggleFullWidth()
         })
-        window.contentView = NSHostingView(rootView: contentView)
+        let hostingView = NSHostingView(rootView: contentView)
+        if let menu = (NSApp.delegate as? AppDelegate)?.makeContextMenu() {
+            hostingView.menu = menu
+            let press = NSPressGestureRecognizer(target: self, action: #selector(handlePress(_:)))
+            press.minimumPressDuration = 0.4
+            hostingView.addGestureRecognizer(press)
+        }
+        window.contentView = hostingView
         window.delegate = self
         installKeyMonitor()
     }
@@ -168,6 +175,13 @@ extension TickerBarWindowController: NSWindowDelegate {
         if !full {
             lastNonFullFrame = window.frame
         }
+    }
+
+    @objc private func handlePress(_ sender: NSPressGestureRecognizer) {
+        guard sender.state == .began || sender.state == .ended else { return }
+        guard let view = sender.view, let menu = view.menu else { return }
+        let location = sender.location(in: view)
+        menu.popUp(positioning: nil, at: location, in: view)
     }
 }
 
