@@ -414,6 +414,25 @@
         object-fit: contain;
       }
 
+      .scrolling-bar {
+        width: 180%;
+        animation: barScroll 16s linear infinite;
+      }
+
+      .scrolling-bar img {
+        width: 100%;
+        height: 100%;
+      }
+
+      @keyframes barScroll {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(-42%);
+        }
+      }
+
       .shot h4 {
         margin: 0;
         font-size: 15px;
@@ -545,14 +564,14 @@
         <p class="section-subtitle">Dark mode views from the live app, sized to the real ratios.</p>
         <div class="shots">
           <div class="shot manage">
-            <div class="shot-media" style="aspect-ratio: 617 / 806">
+            <div class="shot-media" style="aspect-ratio: 712 / 935">
               <img src="/landing-screens/jupbar-manage.png" alt="JupBar manage tickers window" />
             </div>
             <h4>Token manager</h4>
             <p>Add mints, import CSVs, pin tokens, and control alerts in one place.</p>
           </div>
           <div class="shot floating">
-            <div class="shot-media" style="aspect-ratio: 587 / 53">
+            <div class="shot-media scrolling-bar" style="aspect-ratio: 905 / 80">
               <img src="/landing-screens/jupbar-floating.png" alt="JupBar floating ticker bar" />
             </div>
             <h4>Floating ticker bar</h4>

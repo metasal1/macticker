@@ -196,7 +196,8 @@ final class TokenStore: ObservableObject {
         let now = Date()
         let merged = configs.map { config -> TokenQuote in
             let meta = tokenMetaCache[config.mint]
-            if let price = jupPrices[config.mint] {
+            if let item = jupPrices[config.mint] {
+                let price = item.usdPrice
                 let change1h = updateHistory(mint: config.mint, price: price, now: now)
                 maybePlayAlert(mint: config.mint, change1h: change1h, now: now)
                 return TokenQuote(
@@ -206,6 +207,13 @@ final class TokenStore: ObservableObject {
                     price: price,
                     change1h: change1h,
                     volume1h: nil,
+                    volume24h: item.volume24h,
+                    marketCap: item.marketCap,
+                    liquidity: item.liquidity,
+                    ath: item.ath,
+                    atl: item.atl,
+                    supply: item.supply,
+                    holders: item.holders,
                     iconURL: meta?.iconURL
                 )
             }
@@ -216,6 +224,13 @@ final class TokenStore: ObservableObject {
                 price: nil,
                 change1h: nil,
                 volume1h: nil,
+                volume24h: nil,
+                marketCap: nil,
+                liquidity: nil,
+                ath: nil,
+                atl: nil,
+                supply: nil,
+                holders: nil,
                 iconURL: meta?.iconURL
             )
         }

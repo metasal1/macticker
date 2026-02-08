@@ -25,6 +25,13 @@ actor HeliusAPI {
                 price: price,
                 change1h: nil,
                 volume1h: nil,
+                volume24h: nil,
+                marketCap: nil,
+                liquidity: nil,
+                ath: nil,
+                atl: nil,
+                supply: nil,
+                holders: nil,
                 iconURL: iconURL
             )
         }

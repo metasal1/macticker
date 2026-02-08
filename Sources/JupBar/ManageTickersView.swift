@@ -12,6 +12,7 @@ struct ManageTickersView: View {
     @State private var alertThreshold: Double = 5
     @State private var jupApiKey: String = ""
     @State private var jupBaseURL: String = ""
+    @State private var expandedMint: String?
 
     var body: some View {
         ScrollView {
@@ -61,19 +62,20 @@ struct ManageTickersView: View {
                 List(selection: $selectedMint) {
                     ForEach(tokenStore.configs) { config in
                         let quote = tokenStore.quotes.first(where: { $0.mint == config.mint })
-                    HStack(spacing: 8) {
-                        Button(action: {
-                            tokenStore.togglePinned(for: config.mint)
-                        }) {
-                            Image(systemName: config.pinned ? "star.fill" : "star")
-                                .foregroundStyle(config.pinned ? .yellow : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        if let url = quote?.iconURL {
-                            AsyncImage(url: url) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Circle().fill(Color.white.opacity(0.2))
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                tokenStore.togglePinned(for: config.mint)
+                            }) {
+                                Image(systemName: config.pinned ? "star.fill" : "star")
+                                    .foregroundStyle(config.pinned ? .yellow : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                            if let url = quote?.iconURL {
+                                AsyncImage(url: url) { image in
+                                    image.resizable().scaledToFill()
+                                } placeholder: {
+                                    Circle().fill(Color.white.opacity(0.2))
                                 }
                                 .frame(width: 18, height: 18)
                                 .clipShape(Circle())
@@ -89,18 +91,54 @@ struct ManageTickersView: View {
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                             }
-                        Spacer()
-                        Button(action: {
-                            tokenStore.removeMint(config.mint)
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
+                            Spacer()
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.12)) {
+                                    expandedMint = (expandedMint == config.mint) ? nil : config.mint
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text("Details")
+                                        .font(.system(size: 10, weight: .semibold))
+                                    Image(systemName: expandedMint == config.mint ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.white.opacity(0.16))
+                                )
+                                .foregroundStyle(.primary)
+                            }
+                            .buttonStyle(.plain)
+                            Button(action: {
+                                tokenStore.removeMint(config.mint)
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 4)
-                        .listRowBackground(config.pinned ? Color.white.opacity(0.06) : Color.clear)
-                        .tag(config.mint)
+
+                        if expandedMint == config.mint {
+                            VStack(alignment: .leading, spacing: 6) {
+                                detailRow("24h Volume", formatCurrency(quote?.volume24h))
+                                detailRow("Market Cap", formatCurrency(quote?.marketCap))
+                                detailRow("Liquidity", formatCurrency(quote?.liquidity))
+                                detailRow("All-Time High", formatCurrency(quote?.ath))
+                                detailRow("All-Time Low", formatCurrency(quote?.atl))
+                                detailRow("Supply", formatNumber(quote?.supply))
+                                detailRow("Holders", formatInt(quote?.holders))
+                            }
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 26)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .listRowBackground(config.pinned ? Color.white.opacity(0.06) : Color.clear)
+                    .tag(config.mint)
                     }
                     .onMove { indices, newOffset in
                         tokenStore.moveConfigs(from: indices, to: newOffset)
@@ -231,7 +269,7 @@ struct ManageTickersView: View {
 
     private func importCSV() {
         let panel = NSOpenPanel()
-        panel.allowedFileTypes = ["csv"]
+        panel.allowedContentTypes = [.commaSeparatedText]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url,
@@ -242,11 +280,62 @@ struct ManageTickersView: View {
 
     private func exportCSV() {
         let panel = NSSavePanel()
-        panel.allowedFileTypes = ["csv"]
+        panel.allowedContentTypes = [.commaSeparatedText]
         panel.nameFieldStringValue = "jupbar-tokens.csv"
         if panel.runModal() == .OK, let url = panel.url {
             let content = tokenStore.exportCSV()
             try? content.write(to: url, atomically: true, encoding: .utf8)
         }
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private func formatCurrency(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        if abs(value) >= 1_000_000_000 {
+            return String(format: "$%.2fB", value / 1_000_000_000)
+        }
+        if abs(value) >= 1_000_000 {
+            return String(format: "$%.2fM", value / 1_000_000)
+        }
+        if abs(value) >= 1_000 {
+            return String(format: "$%.2fK", value / 1_000)
+        }
+        return String(format: "$%.2f", value)
+    }
+
+    private func formatNumber(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        if abs(value) >= 1_000_000_000 {
+            return String(format: "%.2fB", value / 1_000_000_000)
+        }
+        if abs(value) >= 1_000_000 {
+            return String(format: "%.2fM", value / 1_000_000)
+        }
+        if abs(value) >= 1_000 {
+            return String(format: "%.2fK", value / 1_000)
+        }
+        return String(format: "%.0f", value)
+    }
+
+    private func formatInt(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        if value >= 1_000_000_000 {
+            return String(format: "%.2fB", Double(value) / 1_000_000_000)
+        }
+        if value >= 1_000_000 {
+            return String(format: "%.2fM", Double(value) / 1_000_000)
+        }
+        if value >= 1_000 {
+            return String(format: "%.2fK", Double(value) / 1_000)
+        }
+        return "\(value)"
     }
 }
