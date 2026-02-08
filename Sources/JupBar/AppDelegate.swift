@@ -8,19 +8,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var manageWindowController: ManageTickersWindowController?
     private var toggleBarItem: NSMenuItem?
     private let tokenStore = TokenStore()
+    let usageStore = UsageStatsStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = AppIcon.makeIcon()
         setupMenuBar()
-        tickerWindowController = TickerBarWindowController(tokenStore: tokenStore)
+        tickerWindowController = TickerBarWindowController(tokenStore: tokenStore, usageStore: usageStore)
         tickerWindowController?.showWindow(nil)
-        manageWindowController = ManageTickersWindowController(tokenStore: tokenStore)
+        manageWindowController = ManageTickersWindowController(tokenStore: tokenStore, usageStore: usageStore)
         tokenStore.startPolling()
+        usageStore.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         tokenStore.stopPolling()
+        usageStore.stop()
     }
 
     private func setupMenuBar() {

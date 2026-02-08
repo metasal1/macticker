@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 final class ManageTickersWindowController: NSWindowController {
-    init(tokenStore: TokenStore) {
+    init(tokenStore: TokenStore, usageStore: UsageStatsStore) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 760),
             styleMask: [.titled, .closable, .resizable],
@@ -12,7 +12,7 @@ final class ManageTickersWindowController: NSWindowController {
         window.title = "Manage jup.bar"
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 560, height: 700)
-        let contentView = ManageTickersView(tokenStore: tokenStore, onClose: { [weak window] in
+        let contentView = ManageTickersView(tokenStore: tokenStore, usageStore: usageStore, onClose: { [weak window] in
             window?.performClose(nil)
         })
         window.contentView = NSHostingView(rootView: contentView)

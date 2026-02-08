@@ -3,6 +3,7 @@ import AppKit
 
 struct ManageTickersView: View {
     @ObservedObject var tokenStore: TokenStore
+    @ObservedObject var usageStore: UsageStatsStore
     let onClose: () -> Void
 
     @State private var newMint: String = ""
@@ -15,6 +16,21 @@ struct ManageTickersView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Live Viewers")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(usageStore.activeUsers.map { "\($0)" } ?? "--")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(usageStore.isConnected ? .green : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(usageStore.isConnected ? Color.green.opacity(0.15) : Color.white.opacity(0.08))
+                    )
+                Spacer()
+            }
             Text("Quick Add")
                 .font(.system(size: 14, weight: .semibold))
             HStack {

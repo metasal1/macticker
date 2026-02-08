@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class TickerBarWindowController: NSWindowController {
     private let tokenStore: TokenStore
+    private let usageStore: UsageStatsStore
     private static let positionKeyX = "jupbar.windowOriginX"
     private static let positionKeyY = "jupbar.windowOriginY"
     private var lastNonFullFrame: NSRect?
@@ -11,8 +12,9 @@ final class TickerBarWindowController: NSWindowController {
     private var keyMonitor: Any?
     private var isHidden = false
 
-    init(tokenStore: TokenStore) {
+    init(tokenStore: TokenStore, usageStore: UsageStatsStore) {
         self.tokenStore = tokenStore
+        self.usageStore = usageStore
         let screenFrame = NSScreen.main?.frame ?? .zero
         let height: CGFloat = 34
         let defaultOrigin = NSPoint(x: 0, y: screenFrame.height - height)
@@ -36,7 +38,7 @@ final class TickerBarWindowController: NSWindowController {
         window.maxSize = NSSize(width: screenFrame.width, height: height)
         super.init(window: window)
         isFullWidth = abs(window.frame.width - screenFrame.width) < 2
-        let contentView = TickerBarView(tokenStore: tokenStore, onToggleFullWidth: { [weak self] in
+        let contentView = TickerBarView(tokenStore: tokenStore, usageStore: usageStore, onToggleFullWidth: { [weak self] in
             self?.toggleFullWidth()
         })
         let hostingView = NSHostingView(rootView: contentView)

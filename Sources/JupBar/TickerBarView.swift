@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TickerBarView: View {
     @ObservedObject var tokenStore: TokenStore
+    @ObservedObject var usageStore: UsageStatsStore
     let onToggleFullWidth: () -> Void
 
     var body: some View {
@@ -15,6 +16,12 @@ struct TickerBarView: View {
                         openJupBar()
                     }
                     .zIndex(1)
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 1, height: 18)
+
+                LiveUsersBadge(count: usageStore.activeUsers, isConnected: usageStore.isConnected)
 
                 Rectangle()
                     .fill(Color.white.opacity(0.08))
@@ -33,7 +40,13 @@ struct TickerBarView: View {
                     if !pinnedQuotes.isEmpty {
                         HStack(spacing: 12) {
                             ForEach(pinnedQuotes, id: \.mint) { quote in
-                                TickerItemView(quote: quote, isPinned: true)
+                                TickerItemView(
+                                    quote: quote,
+                                    isPinned: true,
+                                    onOpen: { openJupiter(for: quote.mint) },
+                                    onPin: { tokenStore.togglePinned(for: quote.mint) },
+                                    onUnpin: { tokenStore.togglePinned(for: quote.mint) }
+                                )
                             }
                         }
                         .fixedSize(horizontal: true, vertical: false)
@@ -43,7 +56,13 @@ struct TickerBarView: View {
                             ForEach(tokenStore.quotes.filter { quote in
                                 !pinned.contains(where: { $0.mint == quote.mint })
                             }, id: \.mint) { quote in
-                                TickerItemView(quote: quote, isPinned: false)
+                                TickerItemView(
+                                    quote: quote,
+                                    isPinned: false,
+                                    onOpen: { openJupiter(for: quote.mint) },
+                                    onPin: { tokenStore.togglePinned(for: quote.mint) },
+                                    onUnpin: { tokenStore.togglePinned(for: quote.mint) }
+                                )
                             }
                         }
                         .fixedSize(horizontal: true, vertical: false)
@@ -60,6 +79,36 @@ struct TickerBarView: View {
             onToggleFullWidth()
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct LiveUsersBadge: View {
+    let count: Int?
+    let isConnected: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isConnected ? Color.green : Color.gray)
+                .frame(width: 6, height: 6)
+            Text(count.map { "\($0) live" } ?? "--")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.08))
+        )
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+        .help("Live viewers")
     }
 }
 
@@ -98,9 +147,20 @@ private func openJupBar() {
     NSWorkspace.shared.open(url)
 }
 
+private func openJupiter(for mint: String) {
+    guard let url = URL(string: "https://jup.ag/tokens/\(mint)?refId=yfgv2ibxy07v") else { return }
+    NSWorkspace.shared.open(url)
+}
+
 struct TickerItemView: View {
     let quote: TokenQuote
     let isPinned: Bool
+    let onOpen: () -> Void
+    let onPin: () -> Void
+    let onUnpin: () -> Void
+
+    @State private var isHovering = false
+    @State private var isHoveringStar = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -130,6 +190,19 @@ struct TickerItemView: View {
                 .foregroundStyle(changeColor(quote.change1h))
                 .lineLimit(1)
             // Volume removed until reliable data source is wired.
+            Button(action: {
+                isPinned ? onUnpin() : onPin()
+            }) {
+                Image(systemName: isPinned ? "star.fill" : "star")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isPinned ? .yellow : .secondary)
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovering || isPinned ? 1 : 0)
+            .animation(.easeInOut(duration: 0.12), value: isHovering)
+            .onHover { hovering in
+                isHoveringStar = hovering
+            }
         }
         .padding(.vertical, 3)
         .padding(.horizontal, 6)
@@ -140,9 +213,12 @@ struct TickerItemView: View {
         .frame(maxHeight: .infinity, alignment: .center)
         .contentShape(Rectangle())
         .onTapGesture {
-            openJupiter(for: quote.mint)
+            if !isHoveringStar {
+                onOpen()
+            }
         }
         .onHover { hovering in
+            isHovering = hovering
             if hovering {
                 NSCursor.pointingHand.set()
             } else {
@@ -190,10 +266,6 @@ struct TickerItemView: View {
         return value >= 0 ? .green : .red
     }
 
-    private func openJupiter(for mint: String) {
-        guard let url = URL(string: "https://jup.ag/tokens/\(mint)?refId=yfgv2ibxy07v") else { return }
-        NSWorkspace.shared.open(url)
-    }
 }
 
 struct MarqueeView<Content: View>: View {
