@@ -10,6 +10,7 @@ final class TokenStore: ObservableObject {
     @Published private(set) var alertThresholdPercent: Double
     @Published private(set) var jupApiKey: String
     @Published private(set) var jupBaseURL: String
+    @Published private(set) var needsApiKey: Bool = false
 
     private let defaultsKey = "jupbar.tokens"
     private let speedKey = "jupbar.scrollSpeed"
@@ -23,6 +24,7 @@ final class TokenStore: ObservableObject {
     private var priceHistory: [String: [PricePoint]] = [:]
     private var lastAlertedAt: [String: Date] = [:]
     private let alertCooldown: TimeInterval = 600
+    private var consecutivePriceFailures: Int = 0
 
     init() {
         let savedSpeed = UserDefaults.standard.double(forKey: speedKey)
@@ -186,6 +188,16 @@ final class TokenStore: ObservableObject {
         }
         let mints = configs.map { $0.mint }
         let jupPrices = await jupPrice.fetchPrices(mints: mints)
+        let hasAnyPrice = jupPrices.values.contains { $0.usdPrice != nil }
+        if hasAnyPrice {
+            consecutivePriceFailures = 0
+            needsApiKey = false
+        } else {
+            consecutivePriceFailures += 1
+            if consecutivePriceFailures >= 2 {
+                needsApiKey = true
+            }
+        }
         let missingMeta = mints.filter { tokenMetaCache[$0] == nil }
         if !missingMeta.isEmpty {
             let meta = await jupTokens.fetchTokens(mints: missingMeta)

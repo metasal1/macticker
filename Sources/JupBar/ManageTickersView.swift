@@ -214,8 +214,13 @@ struct ManageTickersView: View {
 
                 Divider()
 
-            Text("Jupiter API Key")
-                .font(.system(size: 14, weight: .semibold))
+            HStack(spacing: 8) {
+                Text("Jupiter API Key")
+                    .font(.system(size: 14, weight: .semibold))
+                Link("Get one", destination: URL(string: "https://portal.jup.ag/login")!)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
             HStack {
                 TextField("Jup API key", text: $jupApiKey)
                     .textFieldStyle(.roundedBorder)
@@ -224,6 +229,11 @@ struct ManageTickersView: View {
                     guard !key.isEmpty else { return }
                     tokenStore.updateJupApiKey(key)
                 }
+            }
+            if tokenStore.needsApiKey {
+                Text("No prices found. Add a valid Jupiter API key to load prices.")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.orange)
             }
 
             Text("Jupiter RPC / Base URL")
