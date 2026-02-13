@@ -7,3 +7,8 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 .vercel
+
+# Local Remotion scratch project (not part of app deliverable)
+remotion/node_modules/
+remotion/.cache/
+remotion/out/

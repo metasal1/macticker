@@ -136,7 +136,9 @@
         font-weight: 700;
         font-size: 20px;
         letter-spacing: 0.2px;
+        font-family: "Space Grotesk", "Manrope", sans-serif;
       }
+
 
       .dot {
         width: 14px;
@@ -481,6 +483,14 @@
         font-size: 12px;
       }
 
+      .footer-meta {
+        width: 100%;
+        text-align: right;
+        font-size: 11px;
+        opacity: 0.65;
+        letter-spacing: 0.2px;
+      }
+
       footer a {
         color: var(--text);
         text-decoration: none;
@@ -511,6 +521,10 @@
         header {
           flex-direction: column;
           align-items: flex-start;
+        }
+
+        .footer-meta {
+          text-align: left;
         }
       }
     </style>
@@ -637,10 +651,10 @@
 
       <footer>
         <div>
-          Metasal —
           <a href="https://metasal.xyz/?ref=jupbarapp" target="_blank" rel="noopener noreferrer">metasal.xyz</a>
         </div>
         <div>jup.bar • JupBar for Jupiter Cats</div>
+        <div class="footer-meta">v0.3.1 • build 9 • updated 2026-02-13 01:40 UTC</div>
       </footer>
     </div>
   </body>

@@ -8,15 +8,14 @@ final class TokenStore: ObservableObject {
     @Published private(set) var quotes: [TokenQuote] = []
     @Published private(set) var scrollSpeed: Double
     @Published private(set) var alertThresholdPercent: Double
-    @Published private(set) var jupApiKey: String
     @Published private(set) var jupBaseURL: String
-    @Published private(set) var needsApiKey: Bool = false
+    @Published private(set) var needsPriceAttention: Bool = false
 
     private let defaultsKey = "jupbar.tokens"
     private let speedKey = "jupbar.scrollSpeed"
     private let alertKey = "jupbar.alertThresholdPercent"
-    private let jupKey = "jupbar.jupApiKey"
     private let jupBaseKey = "jupbar.jupBaseURL"
+    private let defaultJupApiKey = "3309da44-211b-4acb-9d31-c36fb54d9459"
     private var timer: Timer?
     private var jupPrice: JupPriceClient
     private var jupTokens: JupTokenClient
@@ -31,33 +30,20 @@ final class TokenStore: ObservableObject {
         self.scrollSpeed = savedSpeed > 0 ? savedSpeed : 40
         let savedAlert = UserDefaults.standard.double(forKey: alertKey)
         self.alertThresholdPercent = savedAlert > 0 ? savedAlert : 5
-        let savedJup = UserDefaults.standard.string(forKey: jupKey)
-        let resolvedJup = savedJup?.isEmpty == false ? savedJup! : "3309da44-211b-4acb-9d31-c36fb54d9459"
         let savedBase = UserDefaults.standard.string(forKey: jupBaseKey)
         let resolvedBase = Self.sanitizeBaseURL(savedBase) ?? "https://rpc.jup.bar"
-        self.jupApiKey = resolvedJup
         self.jupBaseURL = resolvedBase
-        self.jupPrice = JupPriceClient(apiKey: resolvedJup, baseURL: resolvedBase)
-        self.jupTokens = JupTokenClient(apiKey: resolvedJup, baseURL: resolvedBase)
+        self.jupPrice = JupPriceClient(apiKey: defaultJupApiKey, baseURL: resolvedBase)
+        self.jupTokens = JupTokenClient(apiKey: defaultJupApiKey, baseURL: resolvedBase)
         load()
-    }
-
-    func updateJupApiKey(_ key: String) {
-        let clean = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        jupApiKey = clean
-        UserDefaults.standard.set(clean, forKey: jupKey)
-        jupPrice = JupPriceClient(apiKey: clean, baseURL: jupBaseURL)
-        jupTokens = JupTokenClient(apiKey: clean, baseURL: jupBaseURL)
-        Task { await refresh() }
     }
 
     func updateJupBaseURL(_ value: String) {
         guard let clean = Self.sanitizeBaseURL(value) else { return }
         jupBaseURL = clean
         UserDefaults.standard.set(clean, forKey: jupBaseKey)
-        jupPrice = JupPriceClient(apiKey: jupApiKey, baseURL: clean)
-        jupTokens = JupTokenClient(apiKey: jupApiKey, baseURL: clean)
+        jupPrice = JupPriceClient(apiKey: defaultJupApiKey, baseURL: clean)
+        jupTokens = JupTokenClient(apiKey: defaultJupApiKey, baseURL: clean)
         Task { await refresh() }
     }
 
@@ -191,11 +177,11 @@ final class TokenStore: ObservableObject {
         let hasAnyPrice = jupPrices.values.contains { $0.usdPrice != nil }
         if hasAnyPrice {
             consecutivePriceFailures = 0
-            needsApiKey = false
+            needsPriceAttention = false
         } else {
             consecutivePriceFailures += 1
             if consecutivePriceFailures >= 2 {
-                needsApiKey = true
+                needsPriceAttention = true
             }
         }
         let missingMeta = mints.filter { tokenMetaCache[$0] == nil }
