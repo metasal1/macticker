@@ -38,32 +38,28 @@ struct TickerBarView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     if !pinnedQuotes.isEmpty {
-                        HStack(spacing: 12) {
-                            ForEach(pinnedQuotes, id: \.mint) { quote in
-                                TickerItemView(
-                                    quote: quote,
-                                    isPinned: true,
-                                    onOpen: { openJupiter(for: quote.mint) },
-                                    onPin: { tokenStore.togglePinned(for: quote.mint) },
-                                    onUnpin: { tokenStore.togglePinned(for: quote.mint) }
-                                )
-                            }
+                        DividerRow(items: pinnedQuotes, id: { $0.mint }, itemSpacing: 10) { quote in
+                            TickerItemView(
+                                quote: quote,
+                                isPinned: true,
+                                onOpen: { openJupiter(for: quote.mint) },
+                                onPin: { tokenStore.togglePinned(for: quote.mint) },
+                                onUnpin: { tokenStore.togglePinned(for: quote.mint) }
+                            )
                         }
                         .fixedSize(horizontal: true, vertical: false)
                     }
                     MarqueeView(speed: tokenStore.scrollSpeed, resetKey: tokenStore.quotes.map(\.mint).joined()) {
-                        HStack(spacing: 20) {
-                            ForEach(tokenStore.quotes.filter { quote in
-                                !pinned.contains(where: { $0.mint == quote.mint })
-                            }, id: \.mint) { quote in
-                                TickerItemView(
-                                    quote: quote,
-                                    isPinned: false,
-                                    onOpen: { openJupiter(for: quote.mint) },
-                                    onPin: { tokenStore.togglePinned(for: quote.mint) },
-                                    onUnpin: { tokenStore.togglePinned(for: quote.mint) }
-                                )
-                            }
+                        DividerRow(items: tokenStore.quotes.filter { quote in
+                            !pinned.contains(where: { $0.mint == quote.mint })
+                        }, id: { $0.mint }, itemSpacing: 10) { quote in
+                            TickerItemView(
+                                quote: quote,
+                                isPinned: false,
+                                onOpen: { openJupiter(for: quote.mint) },
+                                onPin: { tokenStore.togglePinned(for: quote.mint) },
+                                onUnpin: { tokenStore.togglePinned(for: quote.mint) }
+                            )
                         }
                         .fixedSize(horizontal: true, vertical: false)
                     }
@@ -79,6 +75,26 @@ struct TickerBarView: View {
             onToggleFullWidth()
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct DividerRow<Item, Content: View>: View {
+    let items: [Item]
+    let id: (Item) -> String
+    let itemSpacing: CGFloat
+    @ViewBuilder let content: (Item) -> Content
+
+    var body: some View {
+        HStack(spacing: itemSpacing) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                content(item)
+                if index != items.count - 1 {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: 1, height: 16)
+                }
+            }
+        }
     }
 }
 
@@ -181,7 +197,7 @@ struct TickerItemView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            Text(priceString(quote.price))
+            priceText(quote.price)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -227,8 +243,15 @@ struct TickerItemView: View {
         }
     }
 
-    private func priceString(_ value: Double?) -> String {
-        guard let value else { return "--" }
+    private func priceText(_ value: Double?) -> Text {
+        guard let value else { return Text("--") }
+
+        // For tiny values, use subscript to indicate leading zero count:
+        // 0.00004124 -> "$0.0₃4124" (keeps width small while preserving precision).
+        if value > 0, value < 0.001 {
+            return subscriptPriceText(value)
+        }
+
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencySymbol = "$"
@@ -241,7 +264,36 @@ struct TickerItemView: View {
             formatter.maximumFractionDigits = 9
         }
         formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? String(format: "$%.9f", value)
+        let string = formatter.string(from: NSNumber(value: value)) ?? String(format: "$%.9f", value)
+        return Text(string)
+    }
+
+    private func subscriptPriceText(_ value: Double) -> Text {
+        // Fixed-point string for stable digit extraction (avoid scientific notation).
+        var fixed = String(format: "%.12f", value)
+        while fixed.contains(".") && fixed.last == "0" { fixed.removeLast() }
+        if fixed.last == "." { fixed.append("0") }
+
+        guard let dot = fixed.firstIndex(of: ".") else {
+            return Text("$\(fixed)")
+        }
+        let decimals = fixed[fixed.index(after: dot)...]
+        let zeroCount = decimals.prefix { $0 == "0" }.count
+        let significantStart = decimals.index(decimals.startIndex, offsetBy: zeroCount, limitedBy: decimals.endIndex) ?? decimals.endIndex
+        let significant = String(decimals[significantStart...].prefix(5))
+
+        // We always show "$0.0" then a subscript indicating extra zeros beyond that first 0.
+        let extraZeros = max(0, zeroCount - 1)
+
+        var attr = AttributedString("$0.0")
+        if extraZeros > 0 {
+            var sub = AttributedString("\(extraZeros)")
+            sub.font = .system(size: 9, weight: .semibold)
+            sub.baselineOffset = -3
+            attr.append(sub)
+        }
+        attr.append(AttributedString(significant.isEmpty ? "0" : significant))
+        return Text(attr)
     }
 
     private func changeValueString(_ value: Double?) -> String {
