@@ -1,45 +1,46 @@
 import AppKit
 import SwiftUI
+import Darwin
 
-// MARK: - Private CGS API for screen space reservation
-// CGSSetWorkspaceInsets adjusts NSScreen.visibleFrame for all apps — like the Dock does.
-// Parameters: (connection, left, bottom, right, top) in screen points.
 private typealias CGSConnectionID = UInt32
-
-@_silgen_name("CGSMainConnectionID")
-private func CGSMainConnectionID() -> CGSConnectionID
-
-@discardableResult
-@_silgen_name("CGSSetWorkspaceInsets")
-private func CGSSetWorkspaceInsets(
-    _ cid: CGSConnectionID,
-    _ left: CGFloat, _ bottom: CGFloat,
-    _ right: CGFloat, _ top: CGFloat
+private typealias CGSMainConnectionIDFn = @convention(c) () -> CGSConnectionID
+private typealias CGSSetWorkspaceInsetsFn = @convention(c) (
+    CGSConnectionID, CGFloat, CGFloat, CGFloat, CGFloat
 ) -> CGError
 
-// MARK: - Pinned Edge
+@MainActor
+private enum CGS {
+    static let handle: UnsafeMutableRawPointer? = {
+        dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY)
+    }()
 
-private enum PinnedEdge: String {
-    case none   = ""
-    case top    = "top"
-    case bottom = "bottom"
+    static let mainConnection: CGSMainConnectionIDFn? = {
+        guard let handle, let sym = dlsym(handle, "CGSMainConnectionID") else { return nil }
+        return unsafeBitCast(sym, to: CGSMainConnectionIDFn.self)
+    }()
+
+    static let setWorkspaceInsets: CGSSetWorkspaceInsetsFn? = {
+        guard let handle, let sym = dlsym(handle, "CGSSetWorkspaceInsets") else { return nil }
+        return unsafeBitCast(sym, to: CGSSetWorkspaceInsetsFn.self)
+    }()
 }
 
-// MARK: - Window Controller
+private enum PinnedEdge: String {
+    case none = ""
+    case top = "top"
+}
 
 @MainActor
 final class TickerBarWindowController: NSWindowController {
     private let tokenStore: TokenStore
     private let usageStore: UsageStatsStore
-    private static let positionKeyX  = "jupbar.windowOriginX"
-    private static let positionKeyY  = "jupbar.windowOriginY"
+    private static let positionKeyX = "jupbar.windowOriginX"
+    private static let positionKeyY = "jupbar.windowOriginY"
     private static let pinnedEdgeKey = "jupbar.pinnedEdge"
     private var lastNonFullFrame: NSRect?
     private var isFullWidth = true
     private var keyMonitor: Any?
     private var isHidden = false
-
-    // Snap-to-edge state
     private let snapThreshold: CGFloat = 24
     private var snapTimer: Timer?
     private var pinnedEdge: PinnedEdge = .none
@@ -47,10 +48,12 @@ final class TickerBarWindowController: NSWindowController {
     init(tokenStore: TokenStore, usageStore: UsageStatsStore) {
         self.tokenStore = tokenStore
         self.usageStore = usageStore
-        let screenFrame = NSScreen.main?.frame ?? .zero
+        let launchScreenFrame = (NSScreen.main ?? NSScreen.screens.first)?.frame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let screenFrame = launchScreenFrame
         let height: CGFloat = 34
         let defaultOrigin = NSPoint(x: 0, y: screenFrame.height - height)
-        let savedOrigin = Self.loadOrigin(defaultOrigin: defaultOrigin)
+        let savedOrigin = Self.loadOrigin(defaultOrigin: defaultOrigin, screenFrame: screenFrame, height: height)
         let window = NSWindow(
             contentRect: NSRect(x: savedOrigin.x, y: savedOrigin.y, width: screenFrame.width, height: height),
             styleMask: [.borderless, .resizable],
@@ -84,7 +87,6 @@ final class TickerBarWindowController: NSWindowController {
         window.delegate = self
         installKeyMonitor()
 
-        // Restore pinned state from last session
         let savedEdge = PinnedEdge(rawValue: UserDefaults.standard.string(forKey: Self.pinnedEdgeKey) ?? "") ?? .none
         if savedEdge != .none {
             pinnedEdge = savedEdge
@@ -92,7 +94,6 @@ final class TickerBarWindowController: NSWindowController {
             applyScreenInsets(for: savedEdge)
         }
 
-        // Clear insets when app quits so the workspace isn't left with a reserved gap
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(clearScreenInsetsOnQuit),
@@ -106,16 +107,17 @@ final class TickerBarWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Existing helpers
 
-    private static func loadOrigin(defaultOrigin: NSPoint) -> NSPoint {
+    private static func loadOrigin(defaultOrigin: NSPoint, screenFrame: NSRect, height: CGFloat) -> NSPoint {
         let defaults = UserDefaults.standard
         let x = defaults.double(forKey: Self.positionKeyX)
         let y = defaults.double(forKey: Self.positionKeyY)
         if x == 0 && y == 0 {
             return defaultOrigin
         }
-        return NSPoint(x: x, y: y)
+        let clampedX = min(max(CGFloat(x), screenFrame.minX), screenFrame.maxX - 320)
+        let clampedY = min(max(CGFloat(y), screenFrame.minY), screenFrame.maxY - height)
+        return NSPoint(x: clampedX, y: clampedY)
     }
 
     func toggleFullWidthFromMenu() {
@@ -151,7 +153,6 @@ final class TickerBarWindowController: NSWindowController {
             }
             window.setFrame(targetFrame, display: true, animate: true)
             isFullWidth = false
-            // Toggling to non-full-width unpins
             if pinnedEdge != .none {
                 clearPinnedEdge()
             }
@@ -195,47 +196,42 @@ final class TickerBarWindowController: NSWindowController {
         updateFullWidthState(for: window)
     }
 
-    // MARK: - Snap to Edge
-
-    /// Called from windowDidMove with a short debounce so snapping happens on drop, not mid-drag.
     private func scheduleSnapCheck() {
         snapTimer?.invalidate()
         snapTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.checkEdgeSnap()
+                self?.checkTopSnap()
             }
         }
     }
 
-    private func checkEdgeSnap() {
+    private func checkTopSnap() {
         guard let window = window, let screen = activeScreen(for: window) else { return }
         let barHeight = window.frame.height
-
-        // Top snap target: just below the menu bar (screen.visibleFrame.maxY)
-        let visibleTop = screen.visibleFrame.maxY - barHeight
-        // Bottom snap target: bottom of visible frame (above the Dock)
-        let visibleBottom = screen.visibleFrame.minY
-
+        let topY = screen.visibleFrame.maxY - barHeight
         let currentY = window.frame.origin.y
 
-        if abs(currentY - visibleTop) <= snapThreshold {
-            snapToEdge(.top, window: window, screen: screen)
-        } else if abs(currentY - visibleBottom) <= snapThreshold {
-            snapToEdge(.bottom, window: window, screen: screen)
+        if abs(currentY - topY) <= snapThreshold {
+            snapToTop(window: window, screen: screen)
         } else if pinnedEdge != .none {
-            // Dragged away from edge — unpin
             clearPinnedEdge()
         }
     }
 
-    private func snapToEdge(_ edge: PinnedEdge, window: NSWindow, screen: NSScreen) {
-        // Expand to full width and snap to edge
+    private func snapToTop(window: NSWindow, screen: NSScreen) {
         lastNonFullFrame = nil
         isFullWidth = true
-        applyPinnedFrame(for: edge, animated: true)
-        pinnedEdge = edge
-        UserDefaults.standard.set(edge.rawValue, forKey: Self.pinnedEdgeKey)
-        applyScreenInsets(for: edge)
+        let barHeight = window.frame.height
+        let newFrame = NSRect(
+            x: screen.frame.minX,
+            y: screen.visibleFrame.maxY - barHeight,
+            width: screen.frame.width,
+            height: barHeight
+        )
+        window.setFrame(newFrame, display: true, animate: true)
+        pinnedEdge = .top
+        UserDefaults.standard.set(PinnedEdge.top.rawValue, forKey: Self.pinnedEdgeKey)
+        applyScreenInsets(for: .top)
         savePosition(window)
     }
 
@@ -245,65 +241,41 @@ final class TickerBarWindowController: NSWindowController {
         applyScreenInsets(for: .none)
     }
 
-    /// Moves the window to the snapped position for a given edge.
     private func applyPinnedFrame(for edge: PinnedEdge, animated: Bool) {
-        guard let window = window, let screen = activeScreen(for: window) else { return }
-        let screenFrame = screen.frame
+        guard edge == .top, let window = window, let screen = activeScreen(for: window) else { return }
         let barHeight = window.frame.height
-
-        let targetY: CGFloat
-        switch edge {
-        case .top:
-            targetY = screen.visibleFrame.maxY - barHeight
-        case .bottom:
-            targetY = screen.visibleFrame.minY
-        case .none:
-            return
-        }
-
         let newFrame = NSRect(
-            x: screenFrame.minX,
-            y: targetY,
-            width: screenFrame.width,
+            x: screen.frame.minX,
+            y: screen.visibleFrame.maxY - barHeight,
+            width: screen.frame.width,
             height: barHeight
         )
         window.setFrame(newFrame, display: true, animate: animated)
     }
 
-    // MARK: - Screen Space Reservation (CGS)
-
-    /// Reserves screen space so app windows won't maximize/tile into the bar area.
-    /// Uses the private CGSSetWorkspaceInsets API — the same mechanism as the Dock.
     private func applyScreenInsets(for edge: PinnedEdge) {
-        guard let window = window else { return }
-        let barHeight = window.frame.height
-        let cid = CGSMainConnectionID()
-
+        guard let mainConn = CGS.mainConnection, let setInsets = CGS.setWorkspaceInsets else { return }
+        let cid = mainConn()
         switch edge {
         case .top:
-            // Reserve barHeight pts from the top (below the menu bar)
-            CGSSetWorkspaceInsets(cid, 0, 0, 0, barHeight)
-        case .bottom:
-            // Reserve barHeight pts from the bottom (above the Dock)
-            CGSSetWorkspaceInsets(cid, 0, barHeight, 0, 0)
+            guard let window = window else { return }
+            _ = setInsets(cid, 0, 0, 0, window.frame.height)
         case .none:
-            CGSSetWorkspaceInsets(cid, 0, 0, 0, 0)
+            _ = setInsets(cid, 0, 0, 0, 0)
         }
     }
 
     @objc private func clearScreenInsetsOnQuit() {
-        let cid = CGSMainConnectionID()
-        CGSSetWorkspaceInsets(cid, 0, 0, 0, 0)
+        guard let mainConn = CGS.mainConnection, let setInsets = CGS.setWorkspaceInsets else { return }
+        let cid = mainConn()
+        _ = setInsets(cid, 0, 0, 0, 0)
     }
 }
-
-// MARK: - NSWindowDelegate
 
 extension TickerBarWindowController: NSWindowDelegate {
     func windowDidMove(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
         savePosition(window)
-        // If currently pinned and the user drags, trigger a snap-check on drop
         scheduleSnapCheck()
     }
 
@@ -344,9 +316,14 @@ extension TickerBarWindowController: NSWindowDelegate {
     }
 }
 
-// MARK: - Private helpers
-
 private extension TickerBarWindowController {
+    func savePosition(_ window: NSWindow) {
+        let origin = window.frame.origin
+        let defaults = UserDefaults.standard
+        defaults.set(origin.x, forKey: Self.positionKeyX)
+        defaults.set(origin.y, forKey: Self.positionKeyY)
+    }
+
     func activeScreen(for window: NSWindow) -> NSScreen? {
         if let screen = window.screen { return screen }
         let mouse = NSEvent.mouseLocation
@@ -357,11 +334,5 @@ private extension TickerBarWindowController {
         let minY = frame.minY
         let maxY = frame.maxY - height
         return min(max(y, minY), maxY)
-    }
-
-    func savePosition(_ window: NSWindow) {
-        let origin = window.frame.origin
-        UserDefaults.standard.set(origin.x, forKey: Self.positionKeyX)
-        UserDefaults.standard.set(origin.y, forKey: Self.positionKeyY)
     }
 }
