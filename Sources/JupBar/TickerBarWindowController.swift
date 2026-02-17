@@ -106,11 +106,6 @@ final class TickerBarWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        snapTimer?.invalidate()
-        NotificationCenter.default.removeObserver(self)
-    }
-
     // MARK: - Existing helpers
 
     private static func loadOrigin(defaultOrigin: NSPoint) -> NSPoint {
