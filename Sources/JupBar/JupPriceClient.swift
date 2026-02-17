@@ -33,21 +33,49 @@ struct JupPriceClient {
     }
 
     private func fetchChunk(mints: [String], base: String) async -> [String: JupPriceItem]? {
+        // 1) Try GET (works on api.jup.ag).
         var components = URLComponents(string: base)
         components?.path = "/price/v3"
         components?.queryItems = [
             URLQueryItem(name: "ids", value: mints.joined(separator: ","))
         ]
-        guard let url = components?.url else { return nil }
-        var request = URLRequest(url: url)
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        if let url = components?.url {
+            var getRequest = URLRequest(url: url)
+            getRequest.httpMethod = "GET"
+            getRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            if let decoded = await performDecode(request: getRequest) {
+                return decoded
+            }
+        }
+
+        // 2) Fallback to POST for rpc.jup.bar proxies that reject GET.
+        guard let postURL = URL(string: "\(base)/price/v3") else { return nil }
+        var postRequest = URLRequest(url: postURL)
+        postRequest.httpMethod = "POST"
+        postRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        postRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        postRequest.httpBody = try? JSONSerialization.data(withJSONObject: ["ids": mints])
+        return await performDecode(request: postRequest)
+    }
+
+    private func performDecode(request: URLRequest) async -> [String: JupPriceItem]? {
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode([String: JupPriceItem].self, from: data)
+            if let decoded = try? JSONDecoder().decode([String: JupPriceItem].self, from: data) {
+                return decoded
+            }
+            if let wrapped = try? JSONDecoder().decode(JupPriceDataWrapper.self, from: data) {
+                return wrapped.data
+            }
+            return nil
         } catch {
             return nil
         }
     }
+}
+
+private struct JupPriceDataWrapper: Decodable {
+    let data: [String: JupPriceItem]
 }
 
 struct JupPriceItem: Decodable {
