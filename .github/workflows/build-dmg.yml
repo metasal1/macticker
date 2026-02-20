@@ -13,6 +13,10 @@ on:
 jobs:
   build:
     runs-on: macos-14
+    env:
+      APP_NAME: jup.bar
+      BUNDLE_ID: xyz.metasal.jupbar
+      MIN_MACOS: "13.0"
     
     steps:
       - name: Checkout
@@ -26,16 +30,34 @@ jobs:
       - name: Build Release
         run: swift build -c release
 
+      - name: Import Developer ID Certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE_P12" ] || [ -z "$MACOS_CERTIFICATE_PASSWORD" ]; then
+            echo "Missing certificate secrets. Set MACOS_CERTIFICATE_P12 and MACOS_CERTIFICATE_PASSWORD."
+            exit 1
+          fi
+          echo "$MACOS_CERTIFICATE_P12" | base64 -D > certificate.p12 || echo "$MACOS_CERTIFICATE_P12" | base64 --decode > certificate.p12
+          security create-keychain -p "" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s build.keychain login.keychain-db
+          security default-keychain -s build.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+          rm -f certificate.p12
+
       - name: Create App Bundle
         run: |
-          APP_NAME="JupBar"
           APP_DIR="$APP_NAME.app"
           VERSION="${{ github.event.inputs.version || github.ref_name || 'dev' }}"
           
           mkdir -p "$APP_DIR/Contents/MacOS"
           mkdir -p "$APP_DIR/Contents/Resources"
           
-          cp .build/release/JupBar "$APP_DIR/Contents/MacOS/"
+          cp .build/release/JupBar "$APP_DIR/Contents/MacOS/$APP_NAME"
           cp assets/JupBar.icns "$APP_DIR/Contents/Resources/"
           
           cat > "$APP_DIR/Contents/Info.plist" << EOF
@@ -44,23 +66,23 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>CFBundleName</key>
-              <string>JupBar</string>
+              <string>$APP_NAME</string>
               <key>CFBundleDisplayName</key>
-              <string>JupBar</string>
+              <string>$APP_NAME</string>
               <key>CFBundleIdentifier</key>
-              <string>xyz.metasal.jupbar</string>
+              <string>$BUNDLE_ID</string>
               <key>CFBundleVersion</key>
               <string>${VERSION}</string>
               <key>CFBundleShortVersionString</key>
               <string>${VERSION}</string>
               <key>CFBundleExecutable</key>
-              <string>JupBar</string>
+              <string>$APP_NAME</string>
               <key>CFBundleIconFile</key>
               <string>JupBar</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>LSMinimumSystemVersion</key>
-              <string>13.0</string>
+              <string>$MIN_MACOS</string>
               <key>LSUIElement</key>
               <true/>
               <key>NSHighResolutionCapable</key>
@@ -69,21 +91,54 @@ jobs:
           </plist>
           EOF
 
+      - name: Sign App Bundle
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "Missing APPLE_SIGNING_IDENTITY secret."
+            exit 1
+          fi
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$APP_NAME.app"
+          codesign --verify --deep --strict --verbose=2 "$APP_NAME.app"
+
       - name: Create DMG
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name || 'dev' }}"
-          DMG_NAME="JupBar-${VERSION}.dmg"
+          DMG_NAME="$APP_NAME-${VERSION}.dmg"
           
           mkdir -p dmg-contents
-          cp -R JupBar.app dmg-contents/
+          cp -R "$APP_NAME.app" dmg-contents/
           ln -s /Applications dmg-contents/Applications
           
-          hdiutil create -volname "JupBar" \
+          hdiutil create -volname "$APP_NAME" \
             -srcfolder dmg-contents \
             -ov -format UDZO \
             "$DMG_NAME"
           
           cp "$DMG_NAME" "jupbar-latest.dmg"
+
+      - name: Sign + Notarize + Staple DMG
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_SIGNING_IDENTITY" ] || [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "Missing notarization secrets. Set APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID."
+            exit 1
+          fi
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" jupbar-latest.dmg
+          xcrun notarytool submit jupbar-latest.dmg \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple jupbar-latest.dmg
+          xcrun stapler validate jupbar-latest.dmg
 
       - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
@@ -96,7 +151,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            JupBar-*.dmg
+            jup.bar-*.dmg
             jupbar-latest.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
