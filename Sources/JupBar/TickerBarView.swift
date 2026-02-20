@@ -38,7 +38,7 @@ struct TickerBarView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     if !pinnedQuotes.isEmpty {
-                        DividerRow(items: pinnedQuotes, id: { $0.mint }, itemSpacing: 10) { quote in
+                        DividerRow(items: pinnedQuotes, id: { $0.mint }, itemSpacing: 4) { quote in
                             TickerItemView(
                                 quote: quote,
                                 isPinned: true,
@@ -52,7 +52,7 @@ struct TickerBarView: View {
                     MarqueeView(speed: tokenStore.scrollSpeed, resetKey: tokenStore.quotes.map(\.mint).joined()) {
                         DividerRow(items: tokenStore.quotes.filter { quote in
                             !pinned.contains(where: { $0.mint == quote.mint })
-                        }, id: { $0.mint }, itemSpacing: 10) { quote in
+                        }, id: { $0.mint }, itemSpacing: 4) { quote in
                             TickerItemView(
                                 quote: quote,
                                 isPinned: false,
@@ -89,9 +89,9 @@ private struct DividerRow<Item, Content: View>: View {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 content(item)
                 if index != items.count - 1 {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: 1, height: 16)
+                    Text("|")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -246,9 +246,9 @@ struct TickerItemView: View {
     private func priceText(_ value: Double?) -> Text {
         guard let value else { return Text("--") }
 
-        // For tiny values, use subscript to indicate leading zero count:
-        // 0.00004124 -> "$0.0₃4124" (keeps width small while preserving precision).
-        if value > 0, value < 0.001 {
+        // Use subscript notation when decimals have multiple leading zeros.
+        // Example: 0.00000611 (five zeros) -> "$0.0₄611"
+        if shouldUseSubscript(value) {
             return subscriptPriceText(value)
         }
 
@@ -266,6 +266,15 @@ struct TickerItemView: View {
         formatter.minimumFractionDigits = 0
         let string = formatter.string(from: NSNumber(value: value)) ?? String(format: "$%.9f", value)
         return Text(string)
+    }
+
+    private func shouldUseSubscript(_ value: Double) -> Bool {
+        guard value > 0, value < 1 else { return false }
+        let fixed = String(format: "%.12f", value)
+        guard let dot = fixed.firstIndex(of: ".") else { return false }
+        let decimals = fixed[fixed.index(after: dot)...]
+        let zeroCount = decimals.prefix { $0 == "0" }.count
+        return zeroCount >= 2
     }
 
     private func subscriptPriceText(_ value: Double) -> Text {
