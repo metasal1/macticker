@@ -100,11 +100,14 @@ final class TokenStore: ObservableObject {
     }
 
     func sortConfigsAlphabetically() {
+        let quoteSymbols = Dictionary(uniqueKeysWithValues: quotes.map { ($0.mint, $0.symbol) })
         configs.sort { lhs, rhs in
             if lhs.pinned != rhs.pinned {
                 return lhs.pinned && !rhs.pinned
             }
-            return lhs.symbol.lowercased() < rhs.symbol.lowercased()
+            let lhsSymbol = quoteSymbols[lhs.mint] ?? lhs.symbol
+            let rhsSymbol = quoteSymbols[rhs.mint] ?? rhs.symbol
+            return lhsSymbol.localizedCaseInsensitiveCompare(rhsSymbol) == .orderedAscending
         }
         normalizePinnedOrder()
         persist()
