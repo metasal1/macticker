@@ -1,6 +1,61 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Image Cache
+
+@MainActor
+final class ImageCache {
+    static let shared = ImageCache()
+    private var cache: [String: NSImage] = [:]
+    private var inFlight: [String: Task<Void, Never>] = [:]
+
+    func image(for url: URL) async -> NSImage? {
+        let key = url.absoluteString
+        if let cached = cache[key] { return cached }
+        if let existing = inFlight[key] {
+            await existing.value
+            return cache[key]
+        }
+        let task = Task<Void, Never> {
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let img = NSImage(data: data) else { return }
+            cache[key] = img
+        }
+        inFlight[key] = task
+        await task.value
+        inFlight.removeValue(forKey: key)
+        return cache[key]
+    }
+}
+
+struct CachedTokenImage: View {
+    let url: URL
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Circle().fill(Color.white.opacity(0.2))
+            }
+        }
+        .frame(width: 14, height: 14)
+        .clipShape(Circle())
+        .task(id: url) {
+            image = await ImageCache.shared.image(for: url)
+        }
+    }
+}
+
+// MARK: - Marquee Visibility
+
+final class MarqueeVisibilityState: ObservableObject {
+    @Published var isPaused = false
+}
+
 struct TickerBarView: View {
     @ObservedObject var tokenStore: TokenStore
     @ObservedObject var usageStore: UsageStatsStore
@@ -181,13 +236,7 @@ struct TickerItemView: View {
     var body: some View {
         HStack(spacing: 8) {
             if let url = quote.iconURL {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Circle().fill(Color.white.opacity(0.2))
-                }
-                .frame(width: 14, height: 14)
-                .clipShape(Circle())
+                CachedTokenImage(url: url)
             } else {
                 Circle()
                     .fill(Color.white.opacity(0.2))
@@ -333,12 +382,15 @@ struct MarqueeView<Content: View>: View {
     let speed: Double
     let resetKey: String
     let content: Content
+    @EnvironmentObject private var visibilityState: MarqueeVisibilityState
 
     @State private var contentWidth: CGFloat = 1
     @State private var containerWidth: CGFloat = 1
-    @State private var startTime = Date()
-    @State private var pauseStart: Date?
-    @State private var totalPaused: TimeInterval = 0
+    @State private var offset: CGFloat = 0
+    @State private var isHovering = false
+    @State private var timer: Timer?
+
+    private let fps: Double = 30
 
     init(speed: Double, resetKey: String, @ViewBuilder content: () -> Content) {
         self.speed = speed
@@ -348,30 +400,29 @@ struct MarqueeView<Content: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            TimelineView(.animation) { timeline in
-                let elapsed = effectiveElapsed(at: timeline.date)
-                let width = max(1, contentWidth)
-                let offset = -CGFloat(elapsed * speed).truncatingRemainder(dividingBy: width)
-                let repeatCount = max(2, Int(ceil(containerWidth / width)) + 1)
-                ZStack(alignment: .leading) {
-                    HStack(spacing: 0) {
-                        ForEach(0..<repeatCount, id: \.self) { _ in
-                            content
-                        }
+            let repeatCount = max(2, Int(ceil(containerWidth / max(1, contentWidth))) + 1)
+            ZStack(alignment: .leading) {
+                HStack(spacing: 0) {
+                    ForEach(0..<repeatCount, id: \.self) { _ in
+                        content
                     }
-                    content
-                        .hidden()
-                        .background(WidthReader())
                 }
-                .offset(x: offset)
-                .onPreferenceChange(WidthPreferenceKey.self) { width in
-                    if width > 1 {
-                        contentWidth = width
-                    }
+                content
+                    .hidden()
+                    .background(WidthReader())
+            }
+            .offset(x: offset)
+            .onPreferenceChange(WidthPreferenceKey.self) { width in
+                if width > 1 {
+                    contentWidth = width
                 }
             }
             .onAppear {
                 containerWidth = proxy.size.width
+                startTimer()
+            }
+            .onDisappear {
+                stopTimer()
             }
             .onChange(of: proxy.size.width) { newValue in
                 containerWidth = newValue
@@ -379,23 +430,47 @@ struct MarqueeView<Content: View>: View {
         }
         .clipped()
         .onHover { hovering in
-            if hovering {
-                pauseStart = Date()
-            } else if let pauseStart {
-                totalPaused += Date().timeIntervalSince(pauseStart)
-                self.pauseStart = nil
-            }
+            isHovering = hovering
+            updateTimerState()
         }
         .onChange(of: resetKey) { _ in
-            startTime = Date()
-            totalPaused = 0
-            pauseStart = nil
+            offset = 0
+        }
+        .onChange(of: visibilityState.isPaused) { _ in
+            updateTimerState()
         }
     }
 
-    private func effectiveElapsed(at date: Date) -> TimeInterval {
-        let pausedNow = pauseStart.map { date.timeIntervalSince($0) } ?? 0
-        return max(0, date.timeIntervalSince(startTime) - totalPaused - pausedNow)
+    private var shouldAnimate: Bool {
+        !isHovering && !visibilityState.isPaused
+    }
+
+    private func updateTimerState() {
+        if shouldAnimate {
+            startTimer()
+        } else {
+            stopTimer()
+        }
+    }
+
+    private func startTimer() {
+        guard timer == nil else { return }
+        let interval = 1.0 / fps
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            Task { @MainActor in
+                let step = CGFloat(speed / fps)
+                let width = max(1, contentWidth)
+                offset -= step
+                if abs(offset) >= width {
+                    offset += width
+                }
+            }
+        }
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
 }
 

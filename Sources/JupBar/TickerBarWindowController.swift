@@ -34,6 +34,7 @@ private enum PinnedEdge: String {
 final class TickerBarWindowController: NSWindowController {
     private let tokenStore: TokenStore
     private let usageStore: UsageStatsStore
+    private let marqueeVisibility = MarqueeVisibilityState()
     private static let positionKeyX = "jupbar.windowOriginX"
     private static let positionKeyY = "jupbar.windowOriginY"
     private static let pinnedEdgeKey = "jupbar.pinnedEdge"
@@ -76,6 +77,7 @@ final class TickerBarWindowController: NSWindowController {
         let contentView = TickerBarView(tokenStore: tokenStore, usageStore: usageStore, onToggleFullWidth: { [weak self] in
             self?.toggleFullWidth()
         })
+            .environmentObject(marqueeVisibility)
         let hostingView = NSHostingView(rootView: contentView)
         if let menu = (NSApp.delegate as? AppDelegate)?.makeContextMenu() {
             hostingView.menu = menu
@@ -98,6 +100,25 @@ final class TickerBarWindowController: NSWindowController {
             self,
             selector: #selector(clearScreenInsetsOnQuit),
             name: NSApplication.willTerminateNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowOcclusionDidChange(_:)),
+            name: NSWindow.didChangeOcclusionStateNotification,
+            object: window
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidResignActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
     }
@@ -263,6 +284,22 @@ final class TickerBarWindowController: NSWindowController {
         case .none:
             _ = setInsets(cid, 0, 0, 0, 0)
         }
+    }
+
+    @objc private func windowOcclusionDidChange(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        let visible = window.occlusionState.contains(.visible)
+        marqueeVisibility.isPaused = !visible
+    }
+
+    @objc private func appDidResignActive() {
+        marqueeVisibility.isPaused = true
+    }
+
+    @objc private func appDidBecomeActive() {
+        guard let window = window else { return }
+        let visible = window.occlusionState.contains(.visible)
+        marqueeVisibility.isPaused = !visible
     }
 
     @objc private func clearScreenInsetsOnQuit() {
