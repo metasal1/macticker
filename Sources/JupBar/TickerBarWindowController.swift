@@ -280,7 +280,7 @@ final class TickerBarWindowController: NSWindowController {
         switch edge {
         case .top:
             guard let window = window else { return }
-            _ = setInsets(cid, 0, 0, 0, window.frame.height)
+            _ = setInsets(cid, window.frame.height, 0, 0, 0)
         case .none:
             _ = setInsets(cid, 0, 0, 0, 0)
         }
@@ -293,13 +293,18 @@ final class TickerBarWindowController: NSWindowController {
     }
 
     @objc private func appDidResignActive() {
-        marqueeVisibility.isPaused = true
+        // Don't pause when app loses focus — the bar is always-on-top,
+        // so it's visible even when other apps are active.
+        // Only pause on full occlusion (handled by windowOcclusionDidChange).
     }
 
     @objc private func appDidBecomeActive() {
+        // Resume if we were occluded and now visible again
         guard let window = window else { return }
         let visible = window.occlusionState.contains(.visible)
-        marqueeVisibility.isPaused = !visible
+        if visible {
+            marqueeVisibility.isPaused = false
+        }
     }
 
     @objc private func clearScreenInsetsOnQuit() {
